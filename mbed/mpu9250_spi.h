@@ -5,6 +5,9 @@
  
 #define USE_ISR 1
  
+
+#define WAIT_US_FOR_SPI  10 // us
+
 //Magnetometer Registers
 #define AK8963_ADDRESS   0x0C
 #define WHO_AM_I_AK8963  0x00 // should return 0x48
@@ -152,6 +155,20 @@
 #define ZA_OFFSET_H      0x7D
 #define ZA_OFFSET_L      0x7E
 
+
+enum IMUFrequency {
+    MPU9250_FREQ_1000Hz = 0, //0x00
+    MPU9250_FREQ_500Hz, // 0x01
+    MPU9250_FREQ_333Hz, // 0x02
+    MPU9250_FREQ_250Hz, // 0x03
+    MPU9250_FREQ_200Hz, // 0x04
+    MPU9250_FREQ_166Hz, // 0x05 1000/(1+5)
+    MPU9250_FREQ_143Hz, // 0x06 1000/(1+6)
+    MPU9250_FREQ_125Hz, // 0x07 1000/(1+7)
+    MPU9250_FREQ_111Hz, // 0x08 1000/(1+8)
+    MPU9250_FREQ_100Hz, // 0x09 1000/(1+9)
+    MPU9250_FREQ_99Hz, // 0x10 1000/(1+10)
+};
 // Set initial input parameters
 enum AccScale {
   AFS_2G = 0,
@@ -175,7 +192,8 @@ enum MagScale {
 class MPU9250{
 public:
     MPU9250( PinName cs, PinName mosi, PinName miso, PinName sck,
-        AccScale acc_scale, GyroScale gyro_scale, MagScale mag_scale);     // constructor
+        AccScale acc_scale, GyroScale gyro_scale, MagScale mag_scale,
+        IMUFrequency freq);     // constructor
     ~MPU9250();                                                         // destructor
     
     void resetMPU9250( void );
@@ -218,7 +236,7 @@ private:
 private:
     DigitalOut  _cs;
     SPI         _spi;
-    
+    uint8_t     freq_divider_;
     // float       _accscale;
     // float       _gyroscale;
 //      float       _gyroscalerad;

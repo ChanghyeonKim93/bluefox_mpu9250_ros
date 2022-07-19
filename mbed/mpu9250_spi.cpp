@@ -8,13 +8,14 @@ uint8_t Mmode  = 0x06;        // Either 8 Hz 0x02) or 100 Hz (0x06) magnetometer
 
 
 MPU9250::MPU9250( PinName cs, PinName mosi, PinName miso, PinName sck,
-    AccScale acc_scale, GyroScale gyro_scale, MagScale mag_scale) 
+    AccScale acc_scale, GyroScale gyro_scale, MagScale mag_scale, IMUFrequency freq) 
 : _cs(cs), _spi(mosi, miso, sck), 
 acc_scale_(acc_scale), gyro_scale_(gyro_scale), mag_scale_(mag_scale)
 {
     _cs = 1; // deselect
     _spi.format( 8, 0 );
     _spi.frequency( 2000000 );
+    freq_divider_ = freq;
 };
  
 MPU9250::~MPU9250() { };
@@ -37,7 +38,7 @@ void MPU9250::initMPU9250()
     
     // Set sample rate = gyroscope output rate/(1 + SMPLRT_DIV)
     // gyro freq. : 1000 Hz
-    _writeRegister( SMPLRT_DIV, 0x01);  // Use a 200 Hz rate; the same rate set in CONFIG above
+    _writeRegister( SMPLRT_DIV, freq_divider_);  // Use a 200 Hz rate; the same rate set in CONFIG above
     //_writeRegister( SMPLRT_DIV, 0x01);     // Use a 500 Hz rate; the same rate set in CONFIG above
     
     // Set gyroscope full scale range
@@ -528,7 +529,7 @@ uint8_t MPU9250::_readRegister( uint8_t addr ){
     ret = _spi.write( addr | 0x80 );        // send address
     ret = _spi.write( 0x00 );
     _cs =   1;
-    wait_us(20);
+    wait_us(WAIT_US_FOR_SPI);
 
     return ret;
 };
@@ -538,7 +539,7 @@ uint8_t MPU9250::_writeRegister( uint8_t addr, uint8_t data ){
     _spi.write( addr );
     _spi.write( data );    
     _cs =   1;
-    wait_us(20);
+    wait_us(WAIT_US_FOR_SPI);
 
     return 0;
 };
@@ -550,7 +551,7 @@ uint8_t MPU9250::_readBuffer( uint8_t addr, uint8_t len, uint8_t* buf ){
         *(buf++) = _spi.write( 0x00 );          // read data
     }
     _cs =   1;
-    wait_us(20);
+    wait_us(WAIT_US_FOR_SPI);
     return 0;
 };
 
@@ -561,7 +562,7 @@ uint8_t MPU9250::_writeBuffer( uint8_t addr, uint8_t len, uint8_t* buf ){
         _spi.write( *(buf++) );                 // send data
     }
     _cs =   1;
-    wait_us(20);
+    wait_us(WAIT_US_FOR_SPI);
     return 0;
 };
  
