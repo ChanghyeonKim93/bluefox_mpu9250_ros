@@ -23,13 +23,6 @@ EventQueue event_queue(128 * EVENTS_EVENT_SIZE);
 #define IMU_INT   PB_8
 #define TRIGGER   PC_9
 
-// #define SPI2_MOSI PA_7
-// #define SPI2_MISO PA_6
-// #define SPI2_SCK  PA_5
-// #define SPI2_CS   PB_12
-// #define IMU_INT   PB_8
-// #define TRIGGER   PC_9
-
 // Serial
 // uint8_t packet_send[256];
 // uint8_t packet_recv[256];
@@ -48,8 +41,24 @@ EventQueue event_queue(128 * EVENTS_EVENT_SIZE);
 
 BufferedSerial serial(CONSOLE_TX, CONSOLE_RX);
 
-SPI spi(SPI2_MOSI, SPI2_MISO, SPI2_SCK);
-mpu9250_spi imu(spi, SPI2_CS);
+
+float gyroBias[3] = {0, 0, 0}, accelBias[3] = {0, 0, 0}; // Bias corrections for gyro and accelerometer
+float magCalibration[3] = {0,0,0};
+
+MPU9250 imu(SPI2_CS, SPI2_MOSI, SPI2_MISO, SPI2_SCK);
+
+InterruptIn imu_int(IMU_INT);
+int16_t data[9];
+
+volatile bool flag_IMU_init = false;
+void workIMU(){
+    if(flag_IMU_init)
+        imu.read9AxisRaw(data);
+};
+
+void ISR_IMU(){
+    event_queue.call(workIMU);
+};
 
 // Timer to know how much time elapses.
 Timer timer;
@@ -66,57 +75,37 @@ int main() {
     // Start the event queue
     thread_poll.start(callback(&event_queue, &EventQueue::dispatch_forever));
 
-    if(imu.init(1,BITS_DLPF_CFG_188HZ)){  //INIT the mpu9250
-        serial.write("\nCouldn't initialize MPU9250 via SPI!",36);
-    }
-    else {
-        serial.write("\nInit. the MPU9250 SPI.\n",24);
-    }
+    imu.resetMPU9250();
+    ThisThread::sleep_for(1000ms);
 
-    char whoami = (char)imu.whoami()+'d';   
-    serial.write("who am i:", 9);
-    serial.write(&whoami, 1);
-    serial.write("\n",1);
+    imu.calibrateMPU9250(gyroBias, accelBias);
+    ThisThread::sleep_for(1000ms);
 
-    // serial.write("\nWHOAMI=0x%2x\n",imu.whoami()); //output the I2C address to know if SPI is working, it should be 104
+    imu.initMPU9250();
+    ThisThread::sleep_for(1000ms);
     
-    // this_thread.sleep_for(1000);
-    imu.set_gyro_scale(BITS_FS_2000DPS); // set full scale range for gyros
-    ThisThread::sleep_for(1s);
-    imu.set_acc_scale(BITS_FS_16G); // set full scale range for accs
-    ThisThread::sleep_for(1s);
-    imu.AK8963_calib_Magnetometer();
-    ThisThread::sleep_for(1s);
+    imu.initAK8963(magCalibration);
+    ThisThread::sleep_for(1000ms);
+    
+    // Start interrupt at rising edge.
+    imu_int.rise(ISR_IMU);
 
-    // printf("Gyro_scale=%u\n",imu.set_gyro_scale(BITS_FS_2000DPS));    //Set full scale range for gyros
-    // wait(1);  
-    // printf("Acc_scale=%u\n",imu.set_acc_scale(BITS_FS_16G));          //Set full scale range for accs
-    // wait(1);
-    // printf("AK8963 WHIAM=0x%2x\n",imu.AK8963_whoami());
-    // wait(0.1);  
-    // imu.AK8963_calib_Magnetometer();
-
-    // Loop    
-    FILE* mySerialFile = fdopen(&serial, "r+");
+    flag_IMU_init = true;
     while (true) {
         // Write if writable.
         time_curr = timer.elapsed_time();
         std::chrono::duration<int, std::micro> dt_send = time_curr-time_send_prev;
+        
 
-        imu.read_all();
-        FLOAT_UNION temp;
-        temp.float_ = imu.Temperature;
-        // temp.float_ = imu.gyroscope_data[0];
-        // fprintf(mySerialFile, "%0.3f,\n",  imu.Temperature);
-        serial.write(temp.bytes_,4);
-        serial.write("\n",1);
-        ThisThread::sleep_for(100ms);
-        // if(dt_send.count() > 2499){ // 2.5 ms interval
-        //     if(serial.writable()) {
+        // serial.write(temp.bytes_,4);
+        if(dt_send.count() > 19999){ // 2.5 ms interval
+            // imu.read9AxisRaw(data);
 
-        //     }            
-        //     time_send_prev = time_curr;
-        // }
+            if(serial.writable()) {
+
+            }            
+            time_send_prev = time_curr;
+        }
     
         // // Read data if data exists.
         // if(serial.readable()) {
