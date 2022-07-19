@@ -1,39 +1,21 @@
 #include "mpu9250_spi.h"
  
-// Set initial input parameters
-enum Ascale {
-  AFS_2G = 0,
-  AFS_4G,
-  AFS_8G,
-  AFS_16G
-};
  
-enum Gscale {
-  GFS_250DPS = 0,
-  GFS_500DPS,
-  GFS_1000DPS,
-  GFS_2000DPS
-};
- 
-enum Mscale {
-  MFS_14BITS = 0, // 0.6 mG per LSB
-  MFS_16BITS      // 0.15 mG per LSB
-};
- 
-uint8_t Ascale = AFS_16G;     // AFS_2G, AFS_4G, AFS_8G, AFS_16G
-uint8_t Gscale = GFS_2000DPS; // GFS_250DPS, GFS_500DPS, GFS_1000DPS, GFS_2000DPS
-uint8_t Mscale = MFS_16BITS; // MFS_14BITS or MFS_16BITS, 14-bit or 16-bit magnetometer resolution
+// uint8_t Ascale = AFS_16G;     // AFS_2G, AFS_4G, AFS_8G, AFS_16G
+// uint8_t Gscale = GFS_2000DPS; // GFS_250DPS, GFS_500DPS, GFS_1000DPS, GFS_2000DPS
+// uint8_t Mscale = MFS_16BITS; // MFS_14BITS or MFS_16BITS, 14-bit or 16-bit magnetometer resolution
 uint8_t Mmode  = 0x06;        // Either 8 Hz 0x02) or 100 Hz (0x06) magnetometer data ODR  
-float aRes, gRes, mRes;      // scale resolutions per LSB for the sensors
 
 
-MPU9250::MPU9250( PinName cs, PinName mosi, PinName miso, PinName sck ) : _cs(cs), _spi(mosi, miso, sck){
+MPU9250::MPU9250( PinName cs, PinName mosi, PinName miso, PinName sck,
+    AccScale acc_scale, GyroScale gyro_scale, MagScale mag_scale) 
+: _cs(cs), _spi(mosi, miso, sck), 
+acc_scale_(acc_scale), gyro_scale_(gyro_scale), mag_scale_(mag_scale)
+{
     _cs = 1; // deselect
     _spi.format( 8, 0 );
     _spi.frequency( 2000000 );
-    
-    return;
-}
+};
  
 MPU9250::~MPU9250() { };
 
@@ -64,7 +46,7 @@ void MPU9250::initMPU9250()
     // c = c & ~0xE0; // Clear self-test bits [7:5] 
     c = c & ~0x02; // Clear Fchoice bits [1:0] 
     c = c & ~0x18; // Clear AFS bits [4:3]
-    c = c | Gscale << 3; // Set full scale range for the gyro
+    c = c | gyro_scale_ << 3; // Set full scale range for the gyro
     // c =| 0x00; // Set Fchoice for the gyro to 11 by writing its inverse to bits 1:0 of GYRO_CONFIG
     _writeRegister( GYRO_CONFIG, c ); // Write new GYRO_CONFIG value to register
     
@@ -72,7 +54,7 @@ void MPU9250::initMPU9250()
     c = _readRegister( ACCEL_CONFIG); // get current ACCEL_CONFIG register value
     // c = c & ~0xE0; // Clear self-test bits [7:5] 
     c = c & ~0x18;  // Clear AFS bits [4:3]
-    c = c | Ascale << 3; // Set full scale range for the accelerometer 
+    c = c | acc_scale_ << 3; // Set full scale range for the accelerometer 
     _writeRegister( ACCEL_CONFIG, c); // Write new ACCEL_CONFIG register value
     
     // Set accelerometer sample rate configuration
@@ -115,49 +97,49 @@ void MPU9250::resetMPU9250(){
 // of the at-rest readings and then loads the resulting offsets into accelerometer and gyro bias registers.
 void MPU9250::calibrateMPU9250(float * dest1, float * dest2)
 {  
-  uint8_t data[12]; // data array to hold accelerometer and gyro x, y, z, data
-  uint16_t ii, packet_count, fifo_count;
-  int32_t gyro_bias[3] = {0, 0, 0}, accel_bias[3] = {0, 0, 0};
-  
-// reset device, reset all registers, clear gyro and accelerometer bias registers
-  _writeRegister(PWR_MGMT_1, 0x80); // Write a one to bit 7 reset bit; toggle reset device
-  wait_us(100000);  
-   
-// get stable time source
-// Set clock source to be PLL with x-axis gyroscope reference, bits 2:0 = 001
-  _writeRegister( PWR_MGMT_1, 0x01);  
-  _writeRegister( PWR_MGMT_2, 0x00); 
-  wait_us(200000);
-  
-// Configure device for bias calculation
-  _writeRegister( INT_ENABLE, 0x00);   // Disable all interrupts
-  _writeRegister( FIFO_EN, 0x00);      // Disable FIFO
-  _writeRegister( PWR_MGMT_1, 0x00);   // Turn on internal clock source
-  _writeRegister( I2C_MST_CTRL, 0x00); // Disable I2C master
-  _writeRegister( USER_CTRL, 0x00);    // Disable FIFO and I2C master modes
-  _writeRegister( USER_CTRL, 0x0C);    // Reset FIFO and DMP
-  wait_us(150000);  
-  
-// Configure MPU9250 gyro and accelerometer for bias calculation
-  _writeRegister( CONFIG, 0x01);      // Set low-pass filter to 188 Hz
-  _writeRegister( SMPLRT_DIV, 0x00);  // Set sample rate to 1 kHz
-  _writeRegister( GYRO_CONFIG, 0x00);  // Set gyro full-scale to 250 degrees per second, maximum sensitivity
-  _writeRegister( ACCEL_CONFIG, 0x00); // Set accelerometer full-scale to 2 g, maximum sensitivity
+    uint8_t data[12]; // data array to hold accelerometer and gyro x, y, z, data
+    uint16_t ii, packet_count, fifo_count;
+    int32_t gyro_bias[3] = {0, 0, 0}, accel_bias[3] = {0, 0, 0};
+    
+    // reset device, reset all registers, clear gyro and accelerometer bias registers
+    _writeRegister(PWR_MGMT_1, 0x80); // Write a one to bit 7 reset bit; toggle reset device
+    wait_us(100000);  
+    
+    // get stable time source
+    // Set clock source to be PLL with x-axis gyroscope reference, bits 2:0 = 001
+    _writeRegister( PWR_MGMT_1, 0x01);  
+    _writeRegister( PWR_MGMT_2, 0x00); 
+    wait_us(200000);
+    
+    // Configure device for bias calculation
+    _writeRegister( INT_ENABLE, 0x00);   // Disable all interrupts
+    _writeRegister( FIFO_EN, 0x00);      // Disable FIFO
+    _writeRegister( PWR_MGMT_1, 0x00);   // Turn on internal clock source
+    _writeRegister( I2C_MST_CTRL, 0x00); // Disable I2C master
+    _writeRegister( USER_CTRL, 0x00);    // Disable FIFO and I2C master modes
+    _writeRegister( USER_CTRL, 0x0C);    // Reset FIFO and DMP
+    wait_us(150000);  
+    
+    // Configure MPU9250 gyro and accelerometer for bias calculation
+    _writeRegister( CONFIG, 0x01);      // Set low-pass filter to 188 Hz
+    _writeRegister( SMPLRT_DIV, 0x00);  // Set sample rate to 1 kHz
+    _writeRegister( GYRO_CONFIG, 0x00);  // Set gyro full-scale to 250 degrees per second, maximum sensitivity
+    _writeRegister( ACCEL_CONFIG, 0x00); // Set accelerometer full-scale to 2 g, maximum sensitivity
+    
+    uint16_t  gyrosensitivity  = 131;   // = 131 LSB/degrees/sec
+    uint16_t  accelsensitivity = 16384;  // = 16384 LSB/g
  
-  uint16_t  gyrosensitivity  = 131;   // = 131 LSB/degrees/sec
-  uint16_t  accelsensitivity = 16384;  // = 16384 LSB/g
- 
-// Configure FIFO to capture accelerometer and gyro data for bias calculation
-  _writeRegister( USER_CTRL, 0x40);   // Enable FIFO  
-  _writeRegister( FIFO_EN, 0x78);     // Enable gyro and accelerometer sensors for FIFO (max size 512 bytes in MPU-9250)
-  wait_us(400000); // accumulate 40 samples in 80 milliseconds = 480 bytes
- 
-// At end of sample accumulation, turn off FIFO sensor read
-  _writeRegister( FIFO_EN, 0x00);        // Disable gyro and accelerometer sensors for FIFO
-  _readBuffer(FIFO_COUNTH, 2, &data[0]); // read FIFO sample count
-  fifo_count = ((uint16_t)data[0] << 8) | data[1];
-  packet_count = fifo_count/12;// How many sets of full gyro and accelerometer data for averaging
- 
+    // Configure FIFO to capture accelerometer and gyro data for bias calculation
+    _writeRegister( USER_CTRL, 0x40);   // Enable FIFO  
+    _writeRegister( FIFO_EN, 0x78);     // Enable gyro and accelerometer sensors for FIFO (max size 512 bytes in MPU-9250)
+    wait_us(400000); // accumulate 40 samples in 80 milliseconds = 480 bytes
+    
+    // At end of sample accumulation, turn off FIFO sensor read
+    _writeRegister( FIFO_EN, 0x00);        // Disable gyro and accelerometer sensors for FIFO
+    _readBuffer(FIFO_COUNTH, 2, &data[0]); // read FIFO sample count
+    fifo_count = ((uint16_t)data[0] << 8) | data[1];
+    packet_count = fifo_count/12;// How many sets of full gyro and accelerometer data for averaging
+    
     for (ii = 0; ii < packet_count; ii++) {
         int16_t accel_temp[3] = {0, 0, 0}, gyro_temp[3] = {0, 0, 0};
         _readBuffer(FIFO_R_W, 12, &data[0]); // read data for averaging
@@ -382,24 +364,25 @@ void MPU9250::initAK8963(float * destination)
     // Configure the magnetometer for continuous read and highest resolution
     // set Mscale bit 4 to 1 (0) to enable 16 (14) bit resolution in CNTL register,
     // and enable continuous mode data acquisition Mmode (bits [3:0]), 0010for 8 Hz and 0110 for 100 Hz sample rates
-    _writeRegister(I2C_SLV0_DO, Mscale << 4 | Mmode);        //Set magnetometer data resolution and sample ODR
+    _writeRegister(I2C_SLV0_DO, mag_scale_ << 4 | Mmode);        //Set magnetometer data resolution and sample ODR
     _writeRegister(I2C_SLV0_CTRL, 0x81);                     //Enable I2C and transfer 1 byte
     wait_us(10000);
 
 };
- 
-void MPU9250::read6AxisRaw( int16_t* ax, int16_t* ay, int16_t* az, int16_t* gx, int16_t* gy, int16_t* gz ){
+
+void MPU9250::read6AxisRaw(int16_t acc[3], int16_t gyro[3]){
     uint8_t buf[14];
     _readBuffer( ACCEL_XOUT_H, 14, buf );
-    *ax = (int16_t)( ( buf[0]  << 8 ) | buf[1]  );
-    *ay = (int16_t)( ( buf[2]  << 8 ) | buf[3]  );
-    *az = (int16_t)( ( buf[4]  << 8 ) | buf[5]  );
-    *gx = (int16_t)( ( buf[8]  << 8 ) | buf[9]  );
-    *gy = (int16_t)( ( buf[10] << 8 ) | buf[11] );
-    *gz = (int16_t)( ( buf[12] << 8 ) | buf[13] );
+    acc[0]  = (int16_t)( ( buf[0]  << 8 ) | buf[1]  );
+    acc[1]  = (int16_t)( ( buf[2]  << 8 ) | buf[3]  );
+    acc[2]  = (int16_t)( ( buf[4]  << 8 ) | buf[5]  );
+    gyro[0] = (int16_t)( ( buf[8]  << 8 ) | buf[9]  );
+    gyro[1] = (int16_t)( ( buf[10] << 8 ) | buf[11] );
+    gyro[2] = (int16_t)( ( buf[12] << 8 ) | buf[13] );
     return;
-}
-void MPU9250::read6AxisRaw(int16_t* data){
+};
+
+void MPU9250::read6AxisRaw(int16_t data[6]){
     uint8_t buf[14];
     _readBuffer( ACCEL_XOUT_H, 14, buf );
     data[0] = (int16_t)( ( buf[0]  << 8 ) | buf[1]  );
@@ -409,27 +392,27 @@ void MPU9250::read6AxisRaw(int16_t* data){
     data[4] = (int16_t)( ( buf[10] << 8 ) | buf[11] );
     data[5] = (int16_t)( ( buf[12] << 8 ) | buf[13] );
     return;
-}
- 
- 
-void MPU9250::read9AxisRaw( int16_t* ax, int16_t* ay, int16_t* az, int16_t* gx, int16_t* gy, int16_t* gz, int16_t* mx, int16_t* my, int16_t* mz ){
+};
+
+void MPU9250::read9AxisRaw( int16_t acc[3], int16_t gyro[3], int16_t mag[3]){
     uint8_t buf[21];
     _writeRegister( I2C_SLV0_ADDR, AK8963_ADDRESS | 0x80 );     // Set the I2C slave addres of AK8963 and set for read.
     _writeRegister( I2C_SLV0_REG,  AK8963_XOUT_L  );                   // I2C slave 0 register address from where to begin data transfer
     _writeRegister( I2C_SLV0_CTRL, 0x87 );                   // Read 7 bytes from the magnetomete    
     _readBuffer( ACCEL_XOUT_H, 21, buf );
-    *ax = (int16_t)( ( buf[0]  << 8 ) | buf[1]  );
-    *ay = (int16_t)( ( buf[2]  << 8 ) | buf[3]  );
-    *az = (int16_t)( ( buf[4]  << 8 ) | buf[5]  );
-    *gx = (int16_t)( ( buf[8]  << 8 ) | buf[9]  );
-    *gy = (int16_t)( ( buf[10] << 8 ) | buf[11] );
-    *gz = (int16_t)( ( buf[12] << 8 ) | buf[13] );
-    *mx = (int16_t)( ( buf[15] << 8 ) | buf[14] );
-    *my = (int16_t)( ( buf[17] << 8 ) | buf[16] );
-    *mz = (int16_t)( ( buf[19] << 8 ) | buf[18] );
+    acc[0]  = (int16_t)( ( buf[0]  << 8 ) | buf[1]  );
+    acc[1]  = (int16_t)( ( buf[2]  << 8 ) | buf[3]  );
+    acc[2]  = (int16_t)( ( buf[4]  << 8 ) | buf[5]  );
+    gyro[0] = (int16_t)( ( buf[8]  << 8 ) | buf[9]  );
+    gyro[1] = (int16_t)( ( buf[10] << 8 ) | buf[11] );
+    gyro[2] = (int16_t)( ( buf[12] << 8 ) | buf[13] );
+    mag[0]  = (int16_t)( ( buf[15] << 8 ) | buf[14] );
+    mag[1]  = (int16_t)( ( buf[17] << 8 ) | buf[16] );
+    mag[2]  = (int16_t)( ( buf[19] << 8 ) | buf[18] );
     return;
-}
-void MPU9250::read9AxisRaw( int16_t* data){
+};
+
+void MPU9250::read9AxisRaw( int16_t data[9]){
     uint8_t buf[21];
     _writeRegister( I2C_SLV0_ADDR, AK8963_ADDRESS | 0x80 );     // Set the I2C slave addres of AK8963 and set for read.
     _writeRegister( I2C_SLV0_REG,  AK8963_XOUT_L  );                   // I2C slave 0 register address from where to begin data transfer
@@ -447,33 +430,33 @@ void MPU9250::read9AxisRaw( int16_t* data){
     return;
 };
  
-void MPU9250::readAccelRaw( int16_t* ax, int16_t* ay, int16_t* az ){
+void MPU9250::readAccelRaw( int16_t acc[3]){
     uint8_t buf[6];
     _readBuffer( ACCEL_XOUT_H, 6, buf );
-    *ax = (int16_t)( ( buf[0] << 8 ) | buf[1] );
-    *ay = (int16_t)( ( buf[2] << 8 ) | buf[3] );
-    *az = (int16_t)( ( buf[4] << 8 ) | buf[5] );
+    acc[0] = (int16_t)( ( buf[0] << 8 ) | buf[1] );
+    acc[1] = (int16_t)( ( buf[2] << 8 ) | buf[3] );
+    acc[2] = (int16_t)( ( buf[4] << 8 ) | buf[5] );
     return;
 }
  
-void MPU9250::readGyroRaw( int16_t* gx, int16_t* gy, int16_t* gz ){
+void MPU9250::readGyroRaw( int16_t gyro[3] ){
     uint8_t buf[6]; 
     _readBuffer( GYRO_XOUT_H, 6, buf );
-    *gx = (int16_t)( ( buf[0] << 8 ) | buf[1] );
-    *gy = (int16_t)( ( buf[2] << 8 ) | buf[3] );
-    *gz = (int16_t)( ( buf[4] << 8 ) | buf[5] );
+    gyro[0] = (int16_t)( ( buf[0] << 8 ) | buf[1] );
+    gyro[1] = (int16_t)( ( buf[2] << 8 ) | buf[3] );
+    gyro[2] = (int16_t)( ( buf[4] << 8 ) | buf[5] );
     return;
 }
  
-void MPU9250::readMagRaw( int16_t* mx, int16_t* my, int16_t* mz ){
+void MPU9250::readMagRaw( int16_t mag[3] ){
     uint8_t buf[7];
     _writeRegister( I2C_SLV0_ADDR, AK8963_ADDRESS | 0x80 );     // Set the I2C slave addres of AK8963 and set for read.
     _writeRegister( I2C_SLV0_REG,  AK8963_XOUT_L  );                   // I2C slave 0 register address from where to begin data transfer
     _writeRegister( I2C_SLV0_CTRL, 0x87 );                   // Read 7 bytes from the magnetomete
     _readBuffer( EXT_SENS_DATA_00, 7, buf );
-    *mx = (int16_t)( ( buf[1] << 8 ) | buf[0] );
-    *my = (int16_t)( ( buf[3] << 8 ) | buf[2] );
-    *mz = (int16_t)( ( buf[5] << 8 ) | buf[4] );
+    mag[0] = (int16_t)( ( buf[1] << 8 ) | buf[0] );
+    mag[1] = (int16_t)( ( buf[3] << 8 ) | buf[2] );
+    mag[2] = (int16_t)( ( buf[5] << 8 ) | buf[4] );
     return;
 };
  
@@ -483,58 +466,54 @@ int16_t MPU9250::readTempRaw(){
     return (int16_t)( ( buf[0] << 8 ) | buf[1] );
 };
  
-void MPU9250::read6Axis( float* ax, float* ay, float* az, float* gx, float* gy, float* gz ){
-    int16_t a_x, a_y, a_z, g_x, g_y, g_z;
-    read6AxisRaw( &a_x, &a_y, &a_z, &g_x, &g_y, &g_z );
-    *ax =   (float)a_x * _accscale;
-    *ay =   (float)a_y * _accscale;
-    *az =   (float)a_z * _accscale;
-    *gx =   (float)g_x * _gyroscale;
-    *gy =   (float)g_y * _gyroscale;
-    *gz =   (float)g_z * _gyroscale;    
+void MPU9250::read6Axis( float acc[3], float gyro[3] ){
+    int16_t data[6];
+    read6AxisRaw(data);
+    acc[0]  = (float)data[0] * acc_scale_;
+    acc[1]  = (float)data[1] * acc_scale_;
+    acc[2]  = (float)data[2] * acc_scale_;
+    gyro[0] = (float)data[3] * gyro_scale_;
+    gyro[1] = (float)data[4] * gyro_scale_;
+    gyro[2] = (float)data[5] * gyro_scale_;    
     return;
 };
  
-void MPU9250::read9Axis( float* ax, float* ay, float* az, float* gx, float* gy, float* gz, float* mx, float* my, float* mz ){
-    int16_t a_x, a_y, a_z, g_x, g_y, g_z, m_x, m_y, m_z;
-    read9AxisRaw( &a_x, &a_y, &a_z, &g_x, &g_y, &g_z, &m_x, &m_y, &m_z );
-    *ax =   (float)a_x * _accscale;
-    *ay =   (float)a_y * _accscale;
-    *az =   (float)a_z * _accscale;
-    *gx =   (float)g_x * _gyroscale;
-    *gy =   (float)g_y * _gyroscale;
-    *gz =   (float)g_z * _gyroscale;
-    *mx =   (float)m_x ;
-    *my =   (float)m_y ;
-    *mz =   (float)m_z ;
-    return;    
+void MPU9250::read9Axis( float acc[3], float gyro[3], float mag[3]) {
+    int16_t data[9];
+    read9AxisRaw( data);
+    acc[0]  = (float)data[0] * acc_scale_;
+    acc[1]  = (float)data[1] * acc_scale_;
+    acc[2]  = (float)data[2] * acc_scale_;
+    gyro[0] = (float)data[3] * gyro_scale_;
+    gyro[1] = (float)data[4] * gyro_scale_;
+    gyro[2] = (float)data[5] * gyro_scale_;
+    mag[0]  = (float)data[6] ;
+    mag[1]  = (float)data[7] ;
+    mag[2]  = (float)data[8] ;
 };
  
-void MPU9250::readAccel( float* ax, float* ay, float* az ){
-    int16_t x, y ,z;
-    readAccelRaw( &x, &y, &z );
-    *ax = (float)x * _accscale;
-    *ay = (float)y * _accscale;
-    *az = (float)z * _accscale;
-    return;
+void MPU9250::readAccel( float acc[3] ){
+    int16_t acc_raw[3];
+    readAccelRaw( acc_raw );
+    acc[0] = (float)acc_raw[0] * acc_scale_;
+    acc[1] = (float)acc_raw[1] * acc_scale_;
+    acc[2] = (float)acc_raw[2] * acc_scale_;
 };
  
-void MPU9250::readGyro( float* gx, float* gy, float* gz ){
-    int16_t x, y ,z;
-    readGyroRaw( &x, &y, &z );
-    *gx = (float)x * _gyroscale;
-    *gy = (float)y * _gyroscale;
-    *gz = (float)z * _gyroscale;
-    return;
+void MPU9250::readGyro( float gyro[3] ){
+    int16_t gyro_raw[3];
+    readGyroRaw( gyro_raw );
+    gyro[0] = (float)gyro_raw[0] * gyro_scale_;
+    gyro[1] = (float)gyro_raw[1] * gyro_scale_;
+    gyro[2] = (float)gyro_raw[2] * gyro_scale_;
 };
  
-void MPU9250::readMag( float* mx, float* my, float* mz ){
-    int16_t x, y ,z;
-    readMagRaw( &x, &y, &z );
-    *mx = (float)x;
-    *my = (float)y;
-    *mz = (float)z;
-    return;
+void MPU9250::readMag( float mag[3]){
+    int16_t mag_raw[3];
+    readMagRaw( mag_raw );
+    mag[0] = (float)mag_raw[0];
+    mag[1] = (float)mag_raw[1];
+    mag[2] = (float)mag_raw[2];
 };
  
 float MPU9250::readTemp(){
@@ -587,57 +566,57 @@ uint8_t MPU9250::_writeBuffer( uint8_t addr, uint8_t len, uint8_t* buf ){
 };
  
 void MPU9250::getMres() {
-    switch (Mscale)
+    switch (mag_scale_)
     {
         // Possible magnetometer scales (and their register bit settings) are:
         // 14 bit resolution (0) and 16 bit resolution (1)
         case MFS_14BITS:
-            mRes = 10.0*4219.0/8190.0; // Proper scale to return milliGauss
+            mag_resolution_ = 10.0*4219.0/8190.0; // Proper scale to return milliGauss
             break;
         case MFS_16BITS:
-            mRes = 10.0*4219.0/32760.0; // Proper scale to return milliGauss
+            mag_resolution_ = 10.0*4219.0/32760.0; // Proper scale to return milliGauss
             break;
     }
 };
  
 void MPU9250::getGres() {
-    switch (Gscale)
+    switch (gyro_scale_)
     {
         // Possible gyro scales (and their register bit settings) are:
         // 250 DPS (00), 500 DPS (01), 1000 DPS (10), and 2000 DPS  (11). 
             // Here's a bit of an algorith to calculate DPS/(ADC tick) based on that 2-bit value:
         case GFS_250DPS:
-            gRes = 250.0/32768.0;
+            gyro_resolution_ = 250.0/32768.0;
             break;
         case GFS_500DPS:
-            gRes = 500.0/32768.0;
+            gyro_resolution_ = 500.0/32768.0;
             break;
         case GFS_1000DPS:
-            gRes = 1000.0/32768.0;
+            gyro_resolution_ = 1000.0/32768.0;
             break;
         case GFS_2000DPS:
-            gRes = 2000.0/32768.0;
+            gyro_resolution_ = 2000.0/32768.0;
             break;
     }
 };
  
 void MPU9250::getAres() {
-    switch (Ascale)
+    switch (acc_scale_)
     {
         // Possible accelerometer scales (and their register bit settings) are:
         // 2 Gs (00), 4 Gs (01), 8 Gs (10), and 16 Gs  (11). 
             // Here's a bit of an algorith to calculate DPS/(ADC tick) based on that 2-bit value:
         case AFS_2G:
-            aRes = 2.0/32768.0;
+            acc_resolution_ = 2.0/32768.0;
             break;
         case AFS_4G:
-            aRes = 4.0/32768.0;
+            acc_resolution_ = 4.0/32768.0;
             break;
         case AFS_8G:
-            aRes = 8.0/32768.0;
+            acc_resolution_ = 8.0/32768.0;
             break;
         case AFS_16G:
-            aRes = 16.0/32768.0;
+            acc_resolution_ = 16.0/32768.0;
             break;
     }
 };

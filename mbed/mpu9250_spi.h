@@ -152,11 +152,30 @@
 #define ZA_OFFSET_H      0x7D
 #define ZA_OFFSET_L      0x7E
 
-
+// Set initial input parameters
+enum AccScale {
+  AFS_2G = 0,
+  AFS_4G,
+  AFS_8G,
+  AFS_16G
+};
+ 
+enum GyroScale {
+  GFS_250DPS = 0,
+  GFS_500DPS,
+  GFS_1000DPS,
+  GFS_2000DPS
+};
+ 
+enum MagScale {
+  MFS_14BITS = 0, // 0.6 mG per LSB
+  MFS_16BITS      // 0.15 mG per LSB
+};
 
 class MPU9250{
 public:
-    MPU9250( PinName cs, PinName mosi, PinName miso, PinName sck );     // constructor
+    MPU9250( PinName cs, PinName mosi, PinName miso, PinName sck,
+        AccScale acc_scale, GyroScale gyro_scale, MagScale mag_scale);     // constructor
     ~MPU9250();                                                         // destructor
     
     void resetMPU9250( void );
@@ -166,42 +185,27 @@ public:
     void MPU9250SelfTest(float * destination);// Should return percent deviation from factory trim values, +/- 14 or less deviation is a pass
     void initAK8963(float * destination);
 
-    void read6AxisRaw( 
-        int16_t* ax, int16_t* ay, int16_t* az, 
-        int16_t* gx, int16_t* gy, int16_t* gz );
-    void read6AxisRaw(int16_t* data);
+public:
+    void read6AxisRaw(int16_t acc[3], int16_t gyro[3] );
+    void read6AxisRaw(int16_t data[6]);
 
-    void read9AxisRaw( 
-        int16_t* ax, int16_t* ay, int16_t* az, 
-        int16_t* gx, int16_t* gy, int16_t* gz, 
-        int16_t* mx, int16_t* my, int16_t* mz );
-    void read9AxisRaw( int16_t* data);
+    void read9AxisRaw( int16_t acc[3], int16_t gyro[3], int16_t mag[3]);
+    void read9AxisRaw( int16_t data[9]);
 
-    void    readAccelRaw( int16_t* ax, int16_t* ay, int16_t* az );
-    void    readGyroRaw(  int16_t* gx, int16_t* gy, int16_t* gz );
-    void    readMagRaw(   int16_t* mx, int16_t* my, int16_t* mz );
+    void readAccelRaw(int16_t acc[3]);
+    void readGyroRaw(int16_t gyro[3]);
+    void readMagRaw(int16_t mag[3]);
+
     int16_t readTempRaw( void );
 
-    void read6Axis( 
-        float* ax, float* ay, float* az, 
-        float* gx, float* gy, float* gz );
-    void read9Axis( 
-        float* ax, float* ay, float* az, 
-        float* gx, float* gy, float* gz, 
-        float* mx, float* my, float* mz );
-    void  readAccel( float* ax, float* ay, float* az );
-    void  readGyro(  float* gx, float* gy, float* gz );
-    void  readMag(   float* mx, float* my, float* mz );
-    float readTemp( void );
+    void read6Axis(float acc[3], float gyro[3]);
+    void read9Axis(float acc[3], float gyro[3], float mag[3]);
+    void readAccel(float acc[3]);
+    void readGyro(float gyro[3]);
+    void readMag(float mag[3]);
+    float readTemp();
 
 private:
-    DigitalOut  _cs;
-    SPI         _spi;
-    
-    float       _accscale;
-    float       _gyroscale;
-//      float       _gyroscalerad;
-    
     uint8_t _readRegister(   uint8_t addr );
     uint8_t _writeRegister(  uint8_t addr, uint8_t data );
     uint8_t _readBuffer(     uint8_t addr, uint8_t len, uint8_t* buf );
@@ -210,6 +214,19 @@ private:
     void getMres();
     void getAres();
     void getGres();
+
+private:
+    DigitalOut  _cs;
+    SPI         _spi;
+    
+    // float       _accscale;
+    // float       _gyroscale;
+//      float       _gyroscalerad;
+    uint8_t acc_scale_;
+    uint8_t gyro_scale_;
+    uint8_t mag_scale_;
+    float acc_resolution_, gyro_resolution_, mag_resolution_; // scale resolutions per LSB for the sensors
+
 };
  
 #endif

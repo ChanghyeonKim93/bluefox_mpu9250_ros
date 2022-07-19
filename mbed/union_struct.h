@@ -4,6 +4,11 @@
 #include "mbed.h"
 
 // Unions
+typedef union SHORT_UNION_{
+    int16_t ushort_;
+    unsigned char  bytes_[2];
+} SHORT_UNION;
+
 typedef union USHORT_UNION_{
     uint16_t ushort_;
     unsigned char  bytes_[2];

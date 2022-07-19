@@ -20,8 +20,8 @@ EventQueue event_queue(128 * EVENTS_EVENT_SIZE);
 #define SPI2_SCK  PB_13
 #define SPI2_CS   PB_12
 
-#define IMU_INT   PB_8
-#define TRIGGER   PC_9
+#define IMU_INT   PC_9
+#define TRIGGER   PB_8
 
 // Serial
 // uint8_t packet_send[256];
@@ -45,7 +45,7 @@ BufferedSerial serial(CONSOLE_TX, CONSOLE_RX);
 float gyroBias[3] = {0, 0, 0}, accelBias[3] = {0, 0, 0}; // Bias corrections for gyro and accelerometer
 float magCalibration[3] = {0,0,0};
 
-MPU9250 imu(SPI2_CS, SPI2_MOSI, SPI2_MISO, SPI2_SCK);
+MPU9250 imu(SPI2_CS, SPI2_MOSI, SPI2_MISO, SPI2_SCK, AFS_8G, GFS_1000DPS, MFS_16BITS);
 
 InterruptIn imu_int(IMU_INT);
 int16_t data[9];
