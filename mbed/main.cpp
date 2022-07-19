@@ -25,7 +25,7 @@ EventQueue event_queue(128 * EVENTS_EVENT_SIZE);
 
 // IMU
 MPU9250 imu(SPI2_CS, SPI2_MOSI, SPI2_MISO, SPI2_SCK, 
-    AFS_8G, GFS_1000DPS, MFS_16BITS, MPU9250_FREQ_1000Hz);
+    AFS_8G, GFS_1000DPS, MFS_16BITS, MPU9250_FREQ_500Hz);
 
 InterruptIn imu_int(PIN_IMU_INT);
 
@@ -63,6 +63,9 @@ void ISR_IMU(){
 // Serial
 uint8_t packet_send[256];
 uint8_t packet_recv[256];
+
+uint32_t len_packet_recv = 0;
+uint32_t len_packet_send = 0;
 SerialCommunicatorMbed serial(BAUD_RATE);
 
 void workfunction_readSerial(){
@@ -77,6 +80,17 @@ void workfunction_readSerial(){
 };
 void tryToReadSerial(){
     event_queue.call(workfunction_readSerial);
+};
+
+void workfunction_sendSerial(){
+    if(serial.writable()){
+        serial.send_withChecksum(packet_send, len_packet_send);
+        len_packet_send = 0;
+    }
+}
+
+void tryToSendSerial(){
+    event_queue.call(workfunction_sendSerial);
 };
 
 // Timer to know how much time elapses.
@@ -113,12 +127,12 @@ int main() {
     imu_int.rise(ISR_IMU);
 
     flag_IMU_init = true;
-
     while (true) {
         // Write if writable.
         time_curr = timer.elapsed_time();
         std::chrono::duration<int, std::micro> dt_send = time_curr-time_send_prev;
-        
+        // time_curr.count();
+
         if(flag_imu_ready){
             if(serial.writable()) {
                 flag_imu_ready = false;
@@ -143,7 +157,8 @@ int main() {
                 packet_send[16] = mag_short[2].bytes_[0];
                 packet_send[17] = mag_short[2].bytes_[1];
 
-                serial.send_withChecksum(packet_send, 18);
+                len_packet_send = 18;
+                tryToSendSerial();
             }
             time_send_prev = time_curr;
         }            
