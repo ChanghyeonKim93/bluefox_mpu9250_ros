@@ -8,6 +8,9 @@
 #include "union_struct.h"
 #include <chrono>
 
+// Timer to know how much time elapses.
+Timer timer;
+
 // Set event queue and worker thread
 Thread thread_poll(osPriorityRealtime); // polling all interrupt signals. https://os.mbed.com/docs/mbed-os/v6.10/apis/thread.html
 EventQueue event_queue(128 * EVENTS_EVENT_SIZE);
@@ -28,17 +31,34 @@ MPU9250 imu(SPI2_CS, SPI2_MOSI, SPI2_MISO, SPI2_SCK,
     AFS_8G, GFS_1000DPS, MFS_16BITS, MPU9250_FREQ_500Hz);
 
 InterruptIn imu_int(PIN_IMU_INT);
+DigitalOut signal_trigger(PIN_TRIGGER);
 
 int16_t data[9];
 SHORT_UNION acc_short[3];
 SHORT_UNION gyro_short[3];
 SHORT_UNION mag_short[3];
 
+uint64_t us_curr;
+USHORT_UNION tsec;
+UINT_UNION   tusec;
+
+#define CAMERA_TRIGGER_LOW  0b01010101
+#define CAMERA_TRIGGER_HIGH 0b10101010
+
 volatile bool flag_IMU_init  = false;
 volatile bool flag_imu_ready = false;
 
+volatile uint8_t trigger_step  = 25;
+volatile uint8_t trigger_count = 0;
+volatile uint8_t flag_camera_trigger = CAMERA_TRIGGER_LOW;
+
 void workfunction_getIMU(){
     if(flag_IMU_init){
+        // Current time
+        us_curr      = timer.elapsed_time().count();
+        tsec.ushort_ = (uint16_t)(us_curr/1000000);
+        tusec.uint_  = (uint32_t)(us_curr-((uint32_t)tsec.ushort_)*1000000);
+        
         imu.read9AxisRaw(data);
         acc_short[0].ushort_ = data[0];
         acc_short[1].ushort_ = data[1];
@@ -93,9 +113,6 @@ void tryToSendSerial(){
     event_queue.call(workfunction_sendSerial);
 };
 
-// Timer to know how much time elapses.
-Timer timer;
-
 int main() {
     // Timer starts.
     timer.start();
@@ -110,9 +127,9 @@ int main() {
     imu.resetMPU9250();
     ThisThread::sleep_for(1000ms);
 
-    float gyroBias[3]  = {0, 0, 0};
-    float accelBias[3] = {0, 0, 0}; // Bias corrections for gyro and accelerometer
-    float magCalibration[3] = {0,0,0};
+    float gyroBias[3]       = {0, 0, 0};
+    float accelBias[3]      = {0, 0, 0}; // Bias corrections for gyro and accelerometer
+    float magCalibration[3] = {0, 0, 0};
 
     imu.calibrateMPU9250(gyroBias, accelBias);
     ThisThread::sleep_for(1000ms);
@@ -126,16 +143,26 @@ int main() {
     // Start interrupt at rising edge.
     imu_int.rise(ISR_IMU);
 
+    // signal_trigger low.
+    signal_trigger = 0;
+
     flag_IMU_init = true;
     while (true) {
         // Write if writable.
         time_curr = timer.elapsed_time();
-        std::chrono::duration<int, std::micro> dt_send = time_curr-time_send_prev;
+        std::chrono::duration<int, std::micro> dt_send = time_curr - time_send_prev;
         // time_curr.count();
 
         if(flag_imu_ready){
             if(serial.writable()) {
-                flag_imu_ready = false;
+
+                ++trigger_count;
+                if(trigger_count >= trigger_step){
+                    trigger_count = 0;
+                    flag_camera_trigger = CAMERA_TRIGGER_HIGH;
+                    signal_trigger = 1;
+                }
+                
                 packet_send[0]  = acc_short[0].bytes_[0];
                 packet_send[1]  = acc_short[0].bytes_[1];
                 packet_send[2]  = acc_short[1].bytes_[0];
@@ -157,8 +184,23 @@ int main() {
                 packet_send[16] = mag_short[2].bytes_[0];
                 packet_send[17] = mag_short[2].bytes_[1];
 
-                len_packet_send = 18;
+                packet_send[18]  = tsec.bytes_[0];  // time (second part, low)
+                packet_send[19]  = tsec.bytes_[1];  // time (second part, high)
+                
+                packet_send[20]  = tusec.bytes_[0]; // time (microsecond part, lowest)
+                packet_send[21]  = tusec.bytes_[1]; // time (microsecond part, low)
+                packet_send[22]  = tusec.bytes_[2]; // time (microsecond part, high)
+                packet_send[23]  = tusec.bytes_[3]; // time (microsecond part, highest)
+
+                packet_send[24]  = flag_camera_trigger; // 'CAMERA_TRIGGER_HIGH' or 'CAMERA_TRIGGER_LOW'
+
+                len_packet_send = 25;
                 tryToSendSerial();
+
+                flag_imu_ready = false;
+
+                signal_trigger = 0;
+                flag_camera_trigger = CAMERA_TRIGGER_LOW;
             }
             time_send_prev = time_curr;
         }            

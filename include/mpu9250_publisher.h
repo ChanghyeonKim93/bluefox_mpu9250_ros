@@ -8,6 +8,9 @@
 
 #include "union_struct.h"
 
+#define CAMERA_TRIGGER_LOW  0b01010101
+#define CAMERA_TRIGGER_HIGH 0b10101010
+
 class MPU9250Publisher{
 private:
 
@@ -29,7 +32,7 @@ private:
     void callbackSerial(const std_msgs::Int8MultiArray::ConstPtr& msg){
         // ROS_INFO_STREAM("Data recv: " << msg->data.size() );
         
-        if(msg->data.size() == 18){
+        if(msg->data.size() == 25){
             SHORT_UNION val;
             val.bytes_[0] = msg->data[0];
             val.bytes_[1] = msg->data[1];
@@ -69,6 +72,19 @@ private:
             val.bytes_[1] = msg->data[17];
             mag_[2] = (double)val.short_ * mag_scale_;
 
+            USHORT_UNION sec;
+            UINT_UNION   usec;
+            sec.bytes_[0]  = msg->data[18];  sec.bytes_[1] = msg->data[19];
+            usec.bytes_[0] = msg->data[20]; usec.bytes_[1] = msg->data[21];
+            usec.bytes_[2] = msg->data[22]; usec.bytes_[3] = msg->data[23];
+
+            uint8_t cam_trigger_state = msg->data[24];
+            time_ = ((double)sec.ushort_ + (double)usec.uint_/1000000.0);
+            
+            std::cout << "time : " << time_ << ", trigger: ";
+            std::cout << (cam_trigger_state == (uint8_t)CAMERA_TRIGGER_HIGH ? "triggered" : "not triggered") << std::endl;
+            
+            // Fill IMU data
             sensor_msgs::Imu msg;
             msg.header.stamp = ros::Time::now();
 
