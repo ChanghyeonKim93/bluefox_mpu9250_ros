@@ -81,8 +81,8 @@ private:
             uint8_t cam_trigger_state = msg->data[24];
             time_ = ((double)sec.ushort_ + (double)usec.uint_/1000000.0);
             
-            std::cout << "time : " << time_ << ", trigger: ";
-            std::cout << (cam_trigger_state == (uint8_t)CAMERA_TRIGGER_HIGH ? "triggered" : "not triggered") << std::endl;
+            // std::cout << "time : " << time_ << ", trigger: ";
+            // std::cout << (cam_trigger_state == (uint8_t)CAMERA_TRIGGER_HIGH ? "triggered" : "not triggered") << std::endl;
             
             // Fill IMU data
             sensor_msgs::Imu msg;
