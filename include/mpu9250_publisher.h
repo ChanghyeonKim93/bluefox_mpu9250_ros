@@ -101,7 +101,7 @@ private:
     };  
 
     void run(){
-        ros::Rate rate(4000);
+        ros::Rate rate(20000);
         while(ros::ok()){
             ros::spinOnce();
             rate.sleep();
