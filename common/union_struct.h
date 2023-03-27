@@ -12,6 +12,11 @@ typedef union USHORT_UNION_{
     unsigned char bytes_[2];
 } USHORT_UNION;
 
+typedef union INT_UNION_{
+    int32_t int_;
+    unsigned char bytes_[4];
+} INT_UNION;
+
 typedef union UINT_UNION_{
     uint32_t uint_;
     unsigned char bytes_[4];
@@ -21,5 +26,10 @@ typedef union FLOAT_UNION_{
     float float_;
     unsigned char bytes_[4];
 } FLOAT_UNION;
+
+typedef union DOUBLE_UNION_{
+    double double_;
+    unsigned char bytes_[8];
+} DOUBLE_UNION;
 
 #endif

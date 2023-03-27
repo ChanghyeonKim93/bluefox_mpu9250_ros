@@ -1,12 +1,12 @@
 <?xml version="1.0"?>
 <package>
-  <name>bluefox_mpu9250_ros</name>
+  <name>visual_inertial_ros</name>
   <version>0.0.0</version>
-  <description>bluefox_mpu9250_ros package</description>
+  <description>visual_inertial_ros package</description>
 
-  <maintainer email="Changhyeon@gmail.com">ChanghyeonKim</maintainer>
+  <maintainer email="hyun91015@gmail.com">ChanghyeonKim</maintainer>
 
-  <license>GPL2.0</license>
+  <license>GPL 2.0</license>
 
   <build_depend>roscpp</build_depend>
   <build_depend>cmake_modules</build_depend>
