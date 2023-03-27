@@ -1,6 +1,6 @@
-#include "mpu9250_publisher.h"
+#include "mpu9250_ros.h"
 
-MPU9250Publisher::MPU9250Publisher(ros::NodeHandle& nh) 
+MPU9250ROS::MPU9250ROS(ros::NodeHandle& nh) 
 : nh_(nh) 
 {
     imu_data_.acc_scale  = 8.0/32768.0 * 9.81; // m/s2
@@ -8,7 +8,7 @@ MPU9250Publisher::MPU9250Publisher(ros::NodeHandle& nh)
     imu_data_.mag_scale  = (10.0*4219.0)/32760.0; // milliGauss
     
     // Subscriber
-    sub_serial_ = nh.subscribe<std_msgs::Int8MultiArray>("/serial/from_nucleo",1, &MPU9250Publisher::callbackSerial, this);
+    sub_serial_ = nh.subscribe<std_msgs::UInt8MultiArray>("/serial/from_nucleo",1, &MPU9250ROS::callbackSerial, this);
 
     // publisher
     pub_imu_ = nh.advertise<sensor_msgs::Imu>("/mpu9250/imu",1);
@@ -18,7 +18,7 @@ MPU9250Publisher::MPU9250Publisher(ros::NodeHandle& nh)
     this->run();
 };
 
-void MPU9250Publisher::run(){
+void MPU9250ROS::run(){
     ros::Rate rate(20000); // 20,000 Hz loop
     while(ros::ok()) {
         ros::spinOnce();
@@ -26,7 +26,7 @@ void MPU9250Publisher::run(){
     }
 };
 
-void MPU9250Publisher::callbackSerial(const std_msgs::Int8MultiArray::ConstPtr& msg)
+void MPU9250ROS::callbackSerial(const std_msgs::UInt8MultiArray::ConstPtr& msg)
 {   
     if(msg->data.size() == 25) {
         SHORT_UNION val;

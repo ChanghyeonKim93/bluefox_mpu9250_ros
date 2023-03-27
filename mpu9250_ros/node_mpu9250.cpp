@@ -2,7 +2,7 @@
 #include <string>
 
 #include <ros/ros.h>
-#include "mpu9250_publisher.h"
+#include "mpu9250_ros.h"
 
 int main(int argc, char **argv) {
     ros::init(argc, argv, "mpu9250_node");
@@ -10,7 +10,7 @@ int main(int argc, char **argv) {
     ROS_INFO_STREAM("mpu9250_node - starts.");
 
 	try{
-        MPU9250Publisher mpu9250_pub(nh);
+        MPU9250ROS mpu9250_ros(nh);
 	}
 	catch (std::exception& e){
         ROS_ERROR(e.what());

@@ -1,9 +1,9 @@
-#ifndef _MPU9250_PUBLISHER_H_
-#define _MPU9250_PUBLISHER_H_
+#ifndef _MPU9250_ROS_H_
+#define _MPU9250_ROS_H_
 
 #include <iostream>
 #include <ros/ros.h>
-#include <std_msgs/Int8MultiArray.h>
+#include <std_msgs/UInt8MultiArray.h>
 #include <sensor_msgs/Imu.h>
 #include <sensor_msgs/MagneticField.h>
 
@@ -24,16 +24,16 @@ struct IMUData{
     double mag_scale;
 };
 
-class MPU9250Publisher
+class MPU9250ROS
 {
 // Constructor
 public:
-    MPU9250Publisher(ros::NodeHandle& nh) ;
+    MPU9250ROS(ros::NodeHandle& nh) ;
     
 // Private methods
 private:
     void run();
-    void callbackSerial(const std_msgs::Int8MultiArray::ConstPtr& msg);
+    void callbackSerial(const std_msgs::UInt8MultiArray::ConstPtr& msg);
 
 // IMU time, 3-D acc., 3-D gyro., 3-D mag.
 private:

@@ -15,20 +15,31 @@ find_package(catkin REQUIRED COMPONENTS
 catkin_package(
   DEPENDS Eigen
   CATKIN_DEPENDS roscpp
-  INCLUDE_DIRS include
-)
-
-set(SRC ${SRC}    
-    src/mpu9250_publisher.cpp
+  INCLUDE_DIRS serial_comm_ros mpu9250_ros
 )
 
 set(INCLUDE_DIRS ${INCLUDE_DIRS} ${CMAKE_CURRENT_BINARY_DIR})
-set(INCLUDE_DIRS ${INCLUDE_DIRS} include)
+set(INCLUDE_DIRS ${INCLUDE_DIRS} 
+  serial_comm_ros
+  mpu9250_ros
+  common
+)
 
 include_directories( ${INCLUDE_DIRS} )
 include_directories( ${catkin_INCLUDE_DIRS} )
 include_directories( ${Eigen_INCLUDE_DIRS} )
 
 # executables
-add_executable(mpu9250_node src/node_mpu9250.cpp ${SRC})
+add_executable(mpu9250_node 
+  mpu9250_ros/mpu9250_ros.cpp
+  mpu9250_ros/node_mpu9250.cpp
+)
 target_link_libraries (mpu9250_node ${catkin_LIBRARIES} ${Eigen_LIBRARIES})
+
+add_executable(serial_comm_node 
+  serial_comm_ros/crc16.cpp
+  serial_comm_ros/serial_comm_ros.cpp
+  serial_comm_ros/serial_communicator.cpp
+  serial_comm_ros/node_serial_comm.cpp
+)
+target_link_libraries (serial_comm_node ${catkin_LIBRARIES} ${Eigen_LIBRARIES})
