@@ -9,6 +9,7 @@ find_package(Eigen REQUIRED)
 find_package(catkin REQUIRED COMPONENTS
   roscpp
   std_msgs
+  sensor_msgs
 )
 
 catkin_package(
@@ -17,17 +18,17 @@ catkin_package(
   INCLUDE_DIRS include
 )
 
-set(SRC ${SRC} 
-    src/timer.cpp
+set(SRC ${SRC}    
+    src/mpu9250_publisher.cpp
 )
 
-set(includeDirs ${includeDirs} ${CMAKE_CURRENT_BINARY_DIR})
-set(includeDirs ${includeDirs} include)
+set(INCLUDE_DIRS ${INCLUDE_DIRS} ${CMAKE_CURRENT_BINARY_DIR})
+set(INCLUDE_DIRS ${INCLUDE_DIRS} include)
 
-include_directories( ${includeDirs} )
+include_directories( ${INCLUDE_DIRS} )
 include_directories( ${catkin_INCLUDE_DIRS} )
 include_directories( ${Eigen_INCLUDE_DIRS} )
 
 # executables
-add_executable(mpu9250_node src/main_mpu9250.cpp ${SRC})
+add_executable(mpu9250_node src/node_mpu9250.cpp ${SRC})
 target_link_libraries (mpu9250_node ${catkin_LIBRARIES} ${Eigen_LIBRARIES})
